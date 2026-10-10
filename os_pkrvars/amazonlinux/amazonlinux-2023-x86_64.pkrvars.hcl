@@ -10,3 +10,7 @@ utm_vm_icon             = "linux"
 sources_enabled = [
   "source.virtualbox-ovf.vm"
 ]
+
+install_build_tools = false
+install_guest_tools = false
+update_packages     = false

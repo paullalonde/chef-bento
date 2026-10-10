@@ -20,3 +20,7 @@ vboxmanage = [
   ["modifyvm", "{{.Name}}", "--mouse", "usb"],
   ["modifyvm", "{{.Name}}", "--keyboard", "usb"],
 ]
+
+install_build_tools = false
+install_guest_tools = false
+update_packages     = false

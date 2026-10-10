@@ -638,7 +638,19 @@ variable "vm_name" {
 }
 
 # builder common block
+variable "install_build_tools" {
+  type        = bool
+  default     = true
+}
+variable "install_guest_tools" {
+  type        = bool
+  default     = true
+}
 variable "scripts" {
   type    = list(string)
   default = null
+}
+variable "update_packages" {
+  type        = bool
+  default     = true
 }
