@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 # Getting script directory location
 SCRIPT_RELATIVE_DIR=$(dirname "${BASH_SOURCE[0]}")
 cd "$SCRIPT_RELATIVE_DIR" || exit
@@ -7,6 +9,14 @@ cd "$SCRIPT_RELATIVE_DIR" || exit
 # set tmp dir for files
 AMZDIR="$(pwd)/builds/build_files/amazonlinux-2023-x86_64-virtualbox"
 mkdir -p "$AMZDIR"
+
+# Delete any leftover VM first: "unregistervm --delete" removes its attached disk
+# by path, which would otherwise delete the freshly converted vdi below.
+VM="AmazonLinuxBento"
+echo Powering off and deleting any existing VMs named $VM
+VBoxManage controlvm $VM poweroff --type headless 2> /dev/null
+VBoxManage unregistervm $VM --delete 2> /dev/null
+sleep 5
 
 echo "Cleaning up old files"
 rm -f "$AMZDIR"/*.iso "$AMZDIR"/*.ovf "$AMZDIR"/*.vmdk "$AMZDIR"/*.vdi
@@ -38,12 +48,6 @@ else
   echo "No tool found to create the seed.iso"
   exit 1
 fi
-
-VM="AmazonLinuxBento"
-echo Powering off and deleting any existing VMs named $VM
-VBoxManage controlvm $VM poweroff --type headless 2> /dev/null
-VBoxManage unregistervm $VM --delete 2> /dev/null
-sleep 5
 
 echo "Creating the VM"
 # from https://www.perkin.org.uk/posts/create-virtualbox-vm-from-the-command-line.html
