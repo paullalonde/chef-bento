@@ -69,11 +69,11 @@ VBoxManage storageattach $VM --storagectl "SATA Controller" --port 1 --type dvdd
 sleep 5
 
 echo "Exporting the VM to an OVF file"
-vboxmanage export $VM -o "$AMZDIR"/amazon2023_x86_64.ovf
+VBoxManage export $VM -o "$AMZDIR"/amazon2023_x86_64.ovf
 sleep 5
 
 echo "Deleting the VM"
-vboxmanage unregistervm $VM --delete
+VBoxManage unregistervm $VM --delete
 
 echo "starting packer build of amazonlinux"
 if bento build --vars 'ssh_timeout=60m' --vars vbox_source_path="$AMZDIR"/amazon2023_x86_64.ovf,vbox_checksum=null "$(pwd)"/os_pkrvars/amazonlinux/amazonlinux-2023-x86_64.pkrvars.hcl; then
