@@ -82,7 +82,15 @@ echo "Deleting the VM"
 VBoxManage unregistervm $VM --delete
 
 echo "starting packer build of amazonlinux"
-if bento build --vars 'ssh_timeout=60m' --vars vbox_source_path="$AMZDIR"/amazon2023_x86_64.ovf,vbox_checksum=null "$(pwd)"/os_pkrvars/amazonlinux/amazonlinux-2023-x86_64.pkrvars.hcl; then
+# bento only keeps the last --vars option, so all variables go in a single one
+BENTO_VARS="ssh_timeout=60m,vbox_source_path=$AMZDIR/amazon2023_x86_64.ovf,vbox_checksum=null"
+# Optionally pin the host port Packer forwards to the guest's SSH port (by default
+# Packer picks a random one). Under WSL mirrored networking, the pinned port must
+# also be listed in ignoredPorts in .wslconfig.
+if [ -n "${VBOX_HOST_PORT:-}" ]; then
+  BENTO_VARS="$BENTO_VARS,vbox_host_port_min=$VBOX_HOST_PORT,vbox_host_port_max=$VBOX_HOST_PORT"
+fi
+if bento build --vars "$BENTO_VARS" "$(pwd)"/os_pkrvars/amazonlinux/amazonlinux-2023-x86_64.pkrvars.hcl; then
   echo "Cleaning up files"
   rm -rf "$AMZDIR"
 else

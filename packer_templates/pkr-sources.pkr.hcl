@@ -503,6 +503,8 @@ source "virtualbox-iso" "vm" {
   guest_additions_interface = var.vbox_guest_additions_interface
   guest_os_type             = var.vbox_guest_os_type
   hard_drive_interface      = local.vbox_hard_drive_interface
+  host_port_min             = var.vbox_host_port_min
+  host_port_max             = var.vbox_host_port_max
   iso_interface             = local.vbox_iso_interface
   nested_virt               = var.vbox_nested_virt
   nic_type                  = local.vbox_nic_type
@@ -545,6 +547,8 @@ source "virtualbox-ovf" "vm" {
   guest_additions_path    = var.vbox_guest_additions_path
   source_path             = var.vbox_source_path
   checksum                = var.vbox_checksum
+  host_port_min           = var.vbox_host_port_min
+  host_port_max           = var.vbox_host_port_max
   vboxmanage              = local.vbox_ovf_vboxmanage
   virtualbox_version_file = var.virtualbox_version_file
   # Source block common options

@@ -390,6 +390,14 @@ variable "vbox_hard_drive_interface" {
   type    = string
   default = null
 }
+variable "vbox_host_port_min" {
+  type    = number
+  default = null
+}
+variable "vbox_host_port_max" {
+  type    = number
+  default = null
+}
 variable "vbox_iso_interface" {
   type    = string
   default = null
