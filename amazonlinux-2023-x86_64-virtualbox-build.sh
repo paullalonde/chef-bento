@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+set -eo pipefail
 
 # Getting script directory location
 SCRIPT_RELATIVE_DIR=$(dirname "${BASH_SOURCE[0]}")
@@ -14,8 +14,10 @@ mkdir -p "$AMZDIR"
 # by path, which would otherwise delete the freshly converted vdi below.
 VM="AmazonLinuxBento"
 echo Powering off and deleting any existing VMs named $VM
+set +e
 VBoxManage controlvm $VM poweroff --type headless 2> /dev/null
 VBoxManage unregistervm $VM --delete 2> /dev/null
+set -e
 sleep 5
 
 echo "Cleaning up old files"
