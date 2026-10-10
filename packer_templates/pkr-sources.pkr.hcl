@@ -191,6 +191,11 @@ locals {
       ]
     )
   ) : var.vboxmanage
+  # Imported OVFs (e.g. Amazon Linux) only have the controllers they were built
+  # with, so don't try to remove an IDE controller that doesn't exist.
+  vbox_ovf_vboxmanage = var.vboxmanage == null ? [
+    for cmd in local.vboxmanage : cmd if !(cmd[0] == "storagectl" && contains(cmd, "IDE Controller") && contains(cmd, "--remove"))
+  ] : var.vboxmanage
   vbox_nic_type = var.vbox_nic_type == null ? (
     var.os_name == "freebsd" ? "82545EM" : null
   ) : var.vbox_nic_type
@@ -540,7 +545,7 @@ source "virtualbox-ovf" "vm" {
   guest_additions_path    = var.vbox_guest_additions_path
   source_path             = var.vbox_source_path
   checksum                = var.vbox_checksum
-  vboxmanage              = local.vboxmanage
+  vboxmanage              = local.vbox_ovf_vboxmanage
   virtualbox_version_file = var.virtualbox_version_file
   # Source block common options
   communicator            = local.communicator
