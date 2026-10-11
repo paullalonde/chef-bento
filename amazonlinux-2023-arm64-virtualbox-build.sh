@@ -2,6 +2,11 @@
 
 set -eo pipefail
 
+# Optional first argument: the AL2023 release to build (e.g. 2023.12.20260930.0).
+# Defaults to the latest release.
+AL2023_RELEASE="${1:-latest}"
+AL2023_IMAGES_URL="https://cdn.amazonlinux.com/al2023/os-images/$AL2023_RELEASE/kvm-arm64"
+
 # Getting script directory location
 SCRIPT_RELATIVE_DIR=$(dirname "${BASH_SOURCE[0]}")
 cd "$SCRIPT_RELATIVE_DIR" || exit
@@ -23,14 +28,22 @@ sleep 5
 echo "Cleaning up old files"
 rm -f "$AMZDIR"/*.iso "$AMZDIR"/*.ovf "$AMZDIR"/*.vmdk "$AMZDIR"/*.vdi
 
-# Get virtualbox vdi file name with latest version number
-IMG="$(wget -q https://cdn.amazonlinux.com/al2023/os-images/latest/kvm-arm64/ -O - | grep ".qcow2" | cut -d "\"" -f 2)"
+# Get the qcow2 file name for the requested release
+IMG="$(wget -q "$AL2023_IMAGES_URL"/ -O - | grep ".qcow2" | cut -d "\"" -f 2)" || {
+  echo "Could not find an image for AL2023 release $AL2023_RELEASE at $AL2023_IMAGES_URL" >&2
+  exit 1
+}
+
+# Use the AL2023 release (e.g. 2023.12.20260930.0) as the box version instead of
+# bento's default build date; fall back to the default if it can't be parsed
+AL2023_VERSION="$(echo "$IMG" | grep -oE '[0-9]{4}\.[0-9]+\.[0-9]{8}\.[0-9]+' | head -n 1 || true)"
 
 echo "Downloading $IMG"
-wget -q -O "$AMZDIR"/amazon2023_arm64.qcow2 -c https://cdn.amazonlinux.com/al2023/os-images/latest/kvm-arm64/"$IMG"
+# Named after the image so that "wget -c" never resumes a different release
+wget -q -O "$AMZDIR"/"$IMG" -c "$AL2023_IMAGES_URL"/"$IMG"
 
 echo "Convert qcow2 to vdi"
-qemu-img convert -f qcow2 "$AMZDIR"/amazon2023_arm64.qcow2 -O vdi "$AMZDIR"/amazon2023_arm64.vdi
+qemu-img convert -f qcow2 "$AMZDIR"/"$IMG" -O vdi "$AMZDIR"/amazon2023_arm64.vdi
 
 if [ ! -f "$AMZDIR"/amazon2023_arm64.vdi ]; then
   echo There must be a file named amazon2023_arm64.vdi in "$AMZDIR"!
@@ -97,7 +110,11 @@ BENTO_VARS="ssh_timeout=60m,vbox_source_path=$AMZDIR/amazon2023_arm64.ovf,vbox_c
 if [ -n "${VBOX_HOST_PORT:-}" ]; then
   BENTO_VARS="$BENTO_VARS,vbox_host_port_min=$VBOX_HOST_PORT,vbox_host_port_max=$VBOX_HOST_PORT"
 fi
-if bento build --vars "$BENTO_VARS" "$(pwd)"/os_pkrvars/amazonlinux/amazonlinux-2023-aarch64.pkrvars.hcl; then
+BENTO_ARGS=(--vars "$BENTO_VARS")
+if [ -n "$AL2023_VERSION" ]; then
+  BENTO_ARGS+=(--version "$AL2023_VERSION")
+fi
+if bento build "${BENTO_ARGS[@]}" "$(pwd)"/os_pkrvars/amazonlinux/amazonlinux-2023-aarch64.pkrvars.hcl; then
   echo "Cleaning up files"
   rm -rf "$AMZDIR"
 else

@@ -10,8 +10,8 @@ variable "os_version" {
 variable "os_arch" {
   type = string
   validation {
-    condition     = var.os_arch == "x86_64" || var.os_arch == "aarch64"
-    error_message = "The OS architecture type should be either x86_64 or aarch64."
+    condition     = var.os_arch == "amd64" || var.os_arch == "arm64"
+    error_message = "The OS architecture type should be either amd64 or arm64."
   }
   description = "OS architecture type, x86_64 or aarch64"
 }
@@ -646,19 +646,11 @@ variable "vm_name" {
 }
 
 # builder common block
-variable "install_build_tools" {
+variable "bare_box" {
   type        = bool
-  default     = true
-}
-variable "install_guest_tools" {
-  type        = bool
-  default     = true
+  default     = false
 }
 variable "scripts" {
   type    = list(string)
   default = null
-}
-variable "update_packages" {
-  type        = bool
-  default     = true
 }

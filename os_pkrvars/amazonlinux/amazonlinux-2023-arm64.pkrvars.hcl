@@ -1,6 +1,6 @@
 os_name                 = "amazonlinux"
 os_version              = "2023"
-os_arch                 = "aarch64"
+os_arch                 = "arm64"
 vbox_source_path        = "https://cdn.amazonlinux.com/al2023/os-images/2023.3.20240312.0/vmware/al2023-vmware_esx-2023.3.20240312.0-kernel-6.1-x86_64.xfs.gpt.ova"
 vbox_checksum           = "file:https://cdn.amazonlinux.com/al2023/os-images/2023.3.20240312.0/vmware/SHA256SUMS"
 parallels_guest_os_type = "fedora-core"
@@ -21,6 +21,5 @@ vboxmanage = [
   ["modifyvm", "{{.Name}}", "--keyboard", "usb"],
 ]
 
-install_build_tools = false
-install_guest_tools = false
-update_packages     = false
+bare_box                  = true
+vbox_guest_additions_mode = "disable"

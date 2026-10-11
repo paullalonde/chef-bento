@@ -1,15 +1,16 @@
 locals {
-  guest_tools_scripts = var.install_guest_tools ? [
-    "${path.root}/scripts/_common/guest_tools_virtualbox.sh",
-    "${path.root}/scripts/_common/guest_tools_vmware.sh",
-    "${path.root}/scripts/_common/guest_tools_parallels.sh",
-    "${path.root}/scripts/_common/guest_tools_qemu.sh",
-  ] : []
-  common_scripts = concat([
-    "${path.root}/scripts/_common/motd.sh",
+  bare_box_scripts = [
     "${path.root}/scripts/_common/vagrant.sh",
     "${path.root}/scripts/_common/sshd.sh",
-  ], local.guest_tools_scripts)
+  ]
+  common_scripts = concat(local.bare_box_scripts, 
+    var.bare_box ? [] : [
+      "${path.root}/scripts/_common/motd.sh",
+      "${path.root}/scripts/_common/guest_tools_virtualbox.sh",
+      "${path.root}/scripts/_common/guest_tools_vmware.sh",
+      "${path.root}/scripts/_common/guest_tools_parallels.sh",
+      "${path.root}/scripts/_common/guest_tools_qemu.sh",
+    ])
   scripts = var.scripts == null ? (
     var.is_windows ? [
       "${path.root}/scripts/windows/configure-power.ps1",
@@ -63,7 +64,7 @@ locals {
                   "${path.root}/scripts/fedora/cleanup_dnf.sh",
                   ] : [
                   "${path.root}/scripts/rhel/cleanup_dnf.sh"
-                ]
+                  ]
               )
             )
           )
@@ -107,7 +108,7 @@ build {
     pause_after       = "30s"
     scripts           = ["${path.root}/scripts/_common/update_packages.sh", ]
     valid_exit_codes  = [0, 143]
-    except            = (var.is_windows || !var.update_packages) ? local.source_names : null
+    except            = (var.is_windows || var.bare_box) ? local.source_names : null
   }
   # Install build tools and reboot
   provisioner "shell" {
@@ -117,7 +118,7 @@ build {
     pause_before      = "10s"
     pause_after       = "30s"
     scripts           = ["${path.root}/scripts/_common/build_tools.sh", ]
-    except            = (var.is_windows || !var.install_build_tools) ? local.source_names : null
+    except            = (var.is_windows || var.bare_box) ? local.source_names : null
   }
   # Run common scripts and guest tools installation
   provisioner "shell" {
@@ -136,7 +137,7 @@ build {
     expect_disconnect = true
     pause_before      = "10s"
     scripts           = local.scripts
-    except            = var.is_windows ? local.source_names : null
+    except            = (var.is_windows || var.bare_box) ? local.source_names : null
   }
   # Run minimize script
   provisioner "shell" {
@@ -146,7 +147,7 @@ build {
     pause_before      = "10s"
     pause_after       = "10s"
     scripts           = ["${path.root}/scripts/_common/minimize.sh", ]
-    except            = var.is_windows ? local.source_names : null
+    except            = (var.is_windows || var.bare_box) ? local.source_names : null
   }
 
   # Windows Updates and scripts
