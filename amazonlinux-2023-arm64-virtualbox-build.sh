@@ -1,19 +1,42 @@
 #!/usr/bin/env bash
 
-set -eo pipefail
-
-# Optional first argument: the AL2023 release to build (e.g. 2023.12.20260930.0).
-# Defaults to the latest release.
-AL2023_RELEASE="${1:-latest}"
-AL2023_IMAGES_URL="https://cdn.amazonlinux.com/al2023/os-images/$AL2023_RELEASE/kvm-arm64"
+set -euo pipefail
 
 # Getting script directory location
 SCRIPT_RELATIVE_DIR=$(dirname "${BASH_SOURCE[0]}")
 cd "$SCRIPT_RELATIVE_DIR" || exit
 
-# set tmp dir for files
-AMZDIR="$(pwd)/builds/build_files/amazonlinux-2023-aarch64-virtualbox"
-mkdir -p "$AMZDIR"
+usage() {
+  echo "usage: amazonlinux-2023-amd64-virtualbox-build.sh [OPTIONS]"
+  echo "Options:"
+  echo "  --version <version>   Specify the version to download"
+  exit 1
+}
+
+ARCHITECTURE=arm64
+PROVIDER=virtualbox
+KERNEL=6.1
+VBOX_HOST_PORT=4422
+VERSION=''
+
+while [ $# -gt 0 ]
+do
+  case "$1" in
+    --version)
+      VERSION="$2"
+      shift
+      shift
+    ;;
+    
+    *)
+      usage
+  esac
+done
+
+if [[ -z "${VERSION}" ]]; then
+  echo "The --version argument is required."
+  exit 2
+fi
 
 # Delete any leftover VM first: "unregistervm --delete" removes its attached disk
 # by path, which would otherwise delete the freshly converted vdi below.
@@ -25,40 +48,75 @@ VBoxManage unregistervm $VM --delete 2> /dev/null
 set -e
 sleep 5
 
+BENTO_OS=amazonlinux-2023
+BENTO_BUILDS_DIR="$(pwd)/builds"
+BENTO_BUILD_FILES_DIR="$BENTO_BUILDS_DIR/build_files"
+BENTO_OUTPUT_DIR="$BENTO_BUILDS_DIR/build_complete"
+
+# set tmp dir for files
+AMZDIR="$BENTO_BUILD_FILES_DIR/$BENTO_OS/$VERSION/$ARCHITECTURE/$PROVIDER"
+mkdir -p "$AMZDIR"
+
 echo "Cleaning up old files"
-rm -f "$AMZDIR"/*.iso "$AMZDIR"/*.ovf "$AMZDIR"/*.vmdk "$AMZDIR"/*.vdi
+rm -rf "$AMZDIR"/*.iso "$AMZDIR"/*.ovf "$AMZDIR"/*.vmdk "$AMZDIR"/*.vdi "$AMZDIR"/*.nvram "$BENTO_OUTPUT_DIR"
 
-# Get the qcow2 file name for the requested release
-IMG="$(wget -q "$AL2023_IMAGES_URL"/ -O - | grep ".qcow2" | cut -d "\"" -f 2)" || {
-  echo "Could not find an image for AL2023 release $AL2023_RELEASE at $AL2023_IMAGES_URL" >&2
-  exit 1
-}
+case "$ARCHITECTURE" in
+  amd64)
+    SOURCE_ARCH=x86_64
+    KVM_SUBDIR="kvm"
+  ;;
+  
+  arm64)
+    SOURCE_ARCH="$ARCHITECTURE"
+    KVM_SUBDIR="kvm-$ARCHITECTURE"
+  ;;
 
-# Use the AL2023 release (e.g. 2023.12.20260930.0) as the box version instead of
-# bento's default build date; fall back to the default if it can't be parsed
-AL2023_VERSION="$(echo "$IMG" | grep -oE '[0-9]{4}\.[0-9]+\.[0-9]{8}\.[0-9]+' | head -n 1 || true)"
+  *)
+    echo "Unsupported architecture: $ARCHITECTURE"
+    exit 3
+esac
 
-echo "Downloading $IMG"
-# Named after the image so that "wget -c" never resumes a different release
-wget -q -O "$AMZDIR"/"$IMG" -c "$AL2023_IMAGES_URL"/"$IMG"
+SOURCE_URL="https://cdn.amazonlinux.com/al2023/os-images/$VERSION/$KVM_SUBDIR"
+
+CHECKSUM_FILE=SHA256SUMS
+SIG_FILE=SHA256SUMS.RSASSA_PKCS1_V1_5_SHA_256
+IMAGE_FILE="al2023-kvm-$VERSION-kernel-$KERNEL-$SOURCE_ARCH.xfs.gpt.qcow2"
+
+for FILE in "$CHECKSUM_FILE" "$SIG_FILE" "$IMAGE_FILE"
+do
+  echo "## Downloading $SOURCE_URL/$FILE ..."
+
+  if [[ ! -f "$AMZDIR/$FILE" ]]; then
+    curl -fSL -o "$AMZDIR/$FILE" "$SOURCE_URL/$FILE"
+  fi
+done
+
+pushd "$AMZDIR" >/dev/null
+sha256sum --check --ignore-missing "$CHECKSUM_FILE"
+popd >/dev/null
+
+IMAGE_PATH="$AMZDIR/$IMAGE_FILE"
 
 echo "Convert qcow2 to vdi"
-qemu-img convert -f qcow2 "$AMZDIR"/"$IMG" -O vdi "$AMZDIR"/amazon2023_arm64.vdi
+VDI_NAME="$PROVIDER.vdi"
+VDI_PATH="$AMZDIR/$VDI_NAME"
+qemu-img convert -f qcow2 "$IMAGE_PATH" -O vdi "$VDI_PATH"
 
-if [ ! -f "$AMZDIR"/amazon2023_arm64.vdi ]; then
-  echo There must be a file named amazon2023_arm64.vdi in "$AMZDIR"!
+if [ ! -f "$VDI_PATH" ]; then
+  echo There must be a file named "$VDI_NAME" in "$AMZDIR"!
   echo You can download the files at  https://cdn.amazonlinux.com/al2023/os-images/latest/
   exit 1
 fi
 
 echo "Creating ISO"
 SEED_ISO_DIR="$(pwd)/packer_templates/http/amazon"
+ISO_PATH="$AMZDIR"/seed.iso
 if [ -x "$(command -v genisoimage)" ]; then
-  genisoimage -output "$AMZDIR"/seed.iso -volid cidata -joliet -rock "$SEED_ISO_DIR"/user-data "$SEED_ISO_DIR"/meta-data
+  genisoimage -output "$ISO_PATH" -volid cidata -joliet -rock "$SEED_ISO_DIR"/user-data "$SEED_ISO_DIR"/meta-data
 elif [ -x "$(command -v hdiutil)" ]; then
-  hdiutil makehybrid -o "$AMZDIR"/seed.iso -hfs -joliet -iso -default-volume-name cidata "$SEED_ISO_DIR"/
+  hdiutil makehybrid -o "$ISO_PATH" -hfs -joliet -iso -default-volume-name cidata "$SEED_ISO_DIR"/
 elif [ -x "$(command -v mkisofs)" ]; then
-  mkfsiso9660 -o "$AMZDIR"/seed.iso "$SEED_ISO_DIR"/
+  mkfsiso9660 -o "$ISO_PATH" "$SEED_ISO_DIR"/
 else
   echo "No tool found to create the seed.iso"
   exit 1
@@ -68,8 +126,8 @@ echo "Creating the VM"
 # from https://www.perkin.org.uk/posts/create-virtualbox-vm-from-the-command-line.html
 VBoxManage createvm --name $VM --ostype "Fedora_arm64" --register
 VBoxManage storagectl $VM --name "VirtioSCSI" --add virtio-scsi --controller VirtIO
-VBoxManage storageattach $VM --storagectl "VirtioSCSI" --port 0 --type hdd --medium "$AMZDIR"/amazon2023_arm64.vdi
-VBoxManage storageattach $VM --storagectl "VirtioSCSI" --port 1 --type dvddrive --medium "$AMZDIR"/seed.iso
+VBoxManage storageattach $VM --storagectl "VirtioSCSI" --port 0 --type hdd --medium "$VDI_PATH"
+VBoxManage storageattach $VM --storagectl "VirtioSCSI" --port 1 --type dvddrive --medium "$ISO_PATH"
 VBoxManage modifyvm $VM --chipset armv8virtual
 VBoxManage modifyvm $VM --firmware efi
 VBoxManage modifyvm $VM --memory 4096
@@ -95,7 +153,8 @@ VBoxManage storageattach $VM --storagectl "VirtioSCSI" --port 1 --type dvddrive 
 sleep 5
 
 echo "Exporting the VM to an OVF file"
-VBoxManage export $VM -o "$AMZDIR"/amazon2023_arm64.ovf
+OVF_PATH="$AMZDIR"/$PROVIDER.ovf
+VBoxManage export $VM -o "$OVF_PATH"
 sleep 5
 
 echo "Deleting the VM"
@@ -103,20 +162,27 @@ VBoxManage unregistervm $VM --delete
 
 echo "starting packer build of amazonlinux"
 # bento only keeps the last --vars option, so all variables go in a single one
-BENTO_VARS="ssh_timeout=60m,vbox_source_path=$AMZDIR/amazon2023_arm64.ovf,vbox_checksum=null"
-# Optionally pin the host port Packer forwards to the guest's SSH port (by default
-# Packer picks a random one). Under WSL mirrored networking, the pinned port must
-# also be listed in ignoredPorts in .wslconfig.
-if [ -n "${VBOX_HOST_PORT:-}" ]; then
-  BENTO_VARS="$BENTO_VARS,vbox_host_port_min=$VBOX_HOST_PORT,vbox_host_port_max=$VBOX_HOST_PORT"
-fi
-BENTO_ARGS=(--vars "$BENTO_VARS")
-if [ -n "$AL2023_VERSION" ]; then
-  BENTO_ARGS+=(--version "$AL2023_VERSION")
-fi
-if bento build "${BENTO_ARGS[@]}" "$(pwd)"/os_pkrvars/amazonlinux/amazonlinux-2023-aarch64.pkrvars.hcl; then
-  echo "Cleaning up files"
-  rm -rf "$AMZDIR"
-else
-  exit 1
-fi
+BENTO_VARS="ssh_timeout=60m,vbox_source_path=$OVF_PATH,vbox_checksum=null,vbox_host_port_min=$VBOX_HOST_PORT,vbox_host_port_max=$VBOX_HOST_PORT"
+bento build --version "$VERSION" --vars "$BENTO_VARS" "$(pwd)"/os_pkrvars/amazonlinux/$BENTO_OS-$ARCHITECTURE.pkrvars.hcl
+
+echo "Cleaning up files"
+rm -f "$AMZDIR"/*.iso "$AMZDIR"/*.ovf "$AMZDIR"/*.vmdk "$AMZDIR"/*.vdi "$AMZDIR"/*.nvram
+
+BENTO_BOX="$BENTO_OUTPUT_DIR/$BENTO_OS-$ARCHITECTURE.$PROVIDER.box"
+BENTO_METADATA="$BENTO_OUTPUT_DIR/$BENTO_OS-$ARCHITECTURE._metadata.json"
+OUTPUT_DIR="$BENTO_OUTPUT_DIR/$BENTO_OS"
+OUTPUT_VERSION_DIR="$OUTPUT_DIR/$VERSION"
+OUTPUT_ARCHITECTURE_DIR="$OUTPUT_VERSION_DIR/$ARCHITECTURE"
+OUTPUT_BOX="$OUTPUT_ARCHITECTURE_DIR/$PROVIDER.box"
+OUTPUT_CATALOG="$OUTPUT_DIR/catalog.json"
+
+mkdir -p "$OUTPUT_ARCHITECTURE_DIR"
+
+mv "$BENTO_BOX" "$OUTPUT_BOX"
+
+jq <"$BENTO_METADATA" \
+  --arg url "$OUTPUT_BOX" \
+  '{ name: "paullalonde/amazon-linux-2023", versions: [{ version: .version, status: "active", providers: [{ architecture: .arch, checksum: .providers[0].checksum, checksum_type: .providers[0].checksum_type, name: .providers[0].name, url: $url }] }] }' \
+  >"$OUTPUT_CATALOG"
+
+# rm -f "$BENTO_METADATA"

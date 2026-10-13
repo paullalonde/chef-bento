@@ -58,7 +58,7 @@ AMZDIR="$BENTO_BUILD_FILES_DIR/$BENTO_OS/$VERSION/$ARCHITECTURE/$PROVIDER"
 mkdir -p "$AMZDIR"
 
 echo "Cleaning up old files"
-rm -rf "$AMZDIR"/*.iso "$AMZDIR"/*.ovf "$AMZDIR"/*.vmdk "$AMZDIR"/*.vdi "$BENTO_OUTPUT_DIR"
+rm -rf "$AMZDIR"/*.iso "$AMZDIR"/*.ovf "$AMZDIR"/*.vmdk "$AMZDIR"/*.vdi "$AMZDIR"/*.nvram "$BENTO_OUTPUT_DIR"
 
 case "$ARCHITECTURE" in
   amd64)
@@ -138,7 +138,7 @@ VBoxManage modifyvm $VM --audio-driver none
 VBoxManage modifyvm $VM --ioapic on
 sleep 5
 
-echo "Sleeping for 120 seconds to let the system boot and cloud-init to run"
+echo "Starting $VM then sleeping for 120 seconds to let the system boot and cloud-init to run"
 VBoxManage startvm $VM --type headless
 sleep 120
 VBoxManage controlvm $VM poweroff --type headless
@@ -159,7 +159,7 @@ BENTO_VARS="ssh_timeout=60m,vbox_source_path=$OVF_PATH,vbox_checksum=null,vbox_h
 bento build --version "$VERSION" --vars "$BENTO_VARS" "$(pwd)"/os_pkrvars/amazonlinux/$BENTO_OS-$ARCHITECTURE.pkrvars.hcl
 
 echo "Cleaning up files"
-rm -f "$AMZDIR"/*.iso "$AMZDIR"/*.ovf "$AMZDIR"/*.vmdk "$AMZDIR"/*.vdi
+rm -f "$AMZDIR"/*.iso "$AMZDIR"/*.ovf "$AMZDIR"/*.vmdk "$AMZDIR"/*.vdi "$AMZDIR"/*.nvram
 
 BENTO_BOX="$BENTO_OUTPUT_DIR/$BENTO_OS-$ARCHITECTURE.$PROVIDER.box"
 BENTO_METADATA="$BENTO_OUTPUT_DIR/$BENTO_OS-$ARCHITECTURE._metadata.json"
@@ -171,7 +171,7 @@ OUTPUT_CATALOG="$OUTPUT_DIR/catalog.json"
 
 mkdir -p "$OUTPUT_ARCHITECTURE_DIR"
 
-mv "$(pwd)/builds/build_complete/$BENTO_OS-$ARCHITECTURE.$PROVIDER.box" "$OUTPUT_BOX"
+mv "$BENTO_BOX" "$OUTPUT_BOX"
 
 jq <"$BENTO_METADATA" \
   --arg url "$OUTPUT_BOX" \
