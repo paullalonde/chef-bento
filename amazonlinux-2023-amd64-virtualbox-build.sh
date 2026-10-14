@@ -76,7 +76,7 @@ case "$ARCHITECTURE" in
     exit 3
 esac
 
-SOURCE_URL="https://cdn.amazonlinux.com/al2023/os-images/$VERSION/$KVM_SUBDIR/"
+SOURCE_URL="https://cdn.amazonlinux.com/al2023/os-images/$VERSION/$KVM_SUBDIR"
 
 CHECKSUM_FILE=SHA256SUMS
 SIG_FILE=SHA256SUMS.RSASSA_PKCS1_V1_5_SHA_256
