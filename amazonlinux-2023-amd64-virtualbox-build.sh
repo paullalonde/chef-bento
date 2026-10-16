@@ -178,4 +178,6 @@ jq <"$BENTO_METADATA" \
   '{ name: "paullalonde/amazon-linux-2023", versions: [{ version: .version, status: "active", providers: [{ architecture: .arch, checksum: .providers[0].checksum, checksum_type: .providers[0].checksum_type, name: .providers[0].name, url: $url }] }] }' \
   >"$OUTPUT_CATALOG"
 
+vagrant box add --force "$OUTPUT_BOX"
+
 # rm -f "$BENTO_METADATA"
